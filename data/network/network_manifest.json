@@ -1,0 +1,111 @@
+{
+  "run_id": "run_01",
+  "built_at": "2026-08-19 19:34:36 UTC",
+  "analysis_date": "2026-08-20",
+  "service_window": "2026-08-16 - 2026-08-22",
+  "build_seconds": 210,
+  "environment": {
+    "r": "R version 4.6.1 (2026-06-24 ucrt)",
+    "r5r": "2.4.0",
+    "java_heap_requested": "-Xmx25G",
+    "git_sha": "f91d38487851938ef49a9e2a05457806b66e711e"
+  },
+  "osm": {
+    "sources": [
+      {
+        "file": "delaware-260629.osm.pbf",
+        "bytes": 21594915,
+        "modified": "2026-06-30 01:46:18 UTC"
+      },
+      {
+        "file": "maryland-260629.osm.pbf",
+        "bytes": 212793908,
+        "modified": "2026-06-30 01:47:12 UTC"
+      },
+      {
+        "file": "new-jersey-260629.osm.pbf",
+        "bytes": 161840835,
+        "modified": "2026-06-30 01:46:16 UTC"
+      },
+      {
+        "file": "pennsylvania-260629.osm.pbf",
+        "bytes": 340518889,
+        "modified": "2026-06-30 01:45:49 UTC"
+      }
+    ],
+    "merged": "merged.osm.pbf",
+    "clip_bbox": [-76.49, 39.12, -74.02, 40.99]
+  },
+  "gtfs": [
+    {
+      "feed_key": "patco",
+      "feed_name": "patco",
+      "prefix": "patco",
+      "feed_version": "17",
+      "bytes": 43976,
+      "downloaded": "2026-08-19 17:08:50 UTC",
+      "n_active": 1,
+      "service_start": "20260807",
+      "service_end": "20261231",
+      "has_frequencies": false
+    },
+    {
+      "feed_key": "amtrak",
+      "feed_name": "amtrak",
+      "prefix": "amtrak",
+      "feed_version": "20260819",
+      "bytes": 4932049,
+      "downloaded": "2026-08-19 17:08:57 UTC",
+      "n_active": 52,
+      "service_start": "20260816",
+      "service_end": "20270816",
+      "has_frequencies": false
+    },
+    {
+      "feed_key": "septa",
+      "feed_name": "septa_google_bus",
+      "prefix": "septa",
+      "feed_version": "v202608091",
+      "bytes": 20022594,
+      "downloaded": "2026-08-19 17:09:06 UTC",
+      "n_active": 19,
+      "service_start": "20260809",
+      "service_end": "20260822",
+      "has_frequencies": false
+    },
+    {
+      "feed_key": "septa",
+      "feed_name": "septa_google_rail",
+      "prefix": "septa",
+      "feed_version": "v202608091",
+      "bytes": 636119,
+      "downloaded": "2026-08-19 17:09:06 UTC",
+      "n_active": 3,
+      "service_start": "20260719",
+      "service_end": "20260905",
+      "has_frequencies": false
+    },
+    {
+      "feed_key": "njt_rail",
+      "feed_name": "njt_rail",
+      "prefix": "njt",
+      "bytes": 3201691,
+      "downloaded": "2026-08-19 17:09:10 UTC",
+      "n_active": 7,
+      "service_start": "20260804",
+      "service_end": "20270130",
+      "has_frequencies": false
+    },
+    {
+      "feed_key": "njt_bus",
+      "feed_name": "njt_bus",
+      "prefix": "njt",
+      "bytes": 50751547,
+      "downloaded": "2026-08-19 17:09:22 UTC",
+      "n_active": 2,
+      "service_start": "20260804",
+      "service_end": "20270130",
+      "has_frequencies": false
+    }
+  ]
+}

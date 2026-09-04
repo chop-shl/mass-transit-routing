@@ -1,0 +1,28 @@
+# R / RStudio session state
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# vendored Java runtime
+rjavaenv/
+
+# large binary inputs and built network (01 regenerates)
+*.pbf
+*.mapdb*
+*.dat
+data/gtfs_raw/
+data/network/*.zip
+
+# routing output (03 regenerates)
+outputs/*/route/
+outputs/*/archive/
+outputs/*/scratch/
+
+# intermediate tables (04 regenerates)
+outputs/*/tables/*.rds
+outputs/*/tables/*.png
+
+# logs and scratch
+*.log
+data/smoke_test_results.rds
