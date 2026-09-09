@@ -1,152 +1,189 @@
-# Mass Transit Access to Care
+# Transit Access to Care
+
+An arrival-framed public transit routing pipeline for measuring how patients reach care sites using public transit.
+
+The pipeline takes geocoded patient addresses and routes each patient to every care site, at every hour of the day, over a multi-agency transit network. It answers questions like: *Can this patient reach any of our sites by transit? Which site is closest? How does that change across the day? Who has no transit access at all?*
 
 ---
 
-## Scripts:
+## What the pipeline produces
 
-| Script | Function |
-|--------|--------------|
-| `00_settings.R` | configure: paths, hospitals, routing options, dates. |
-| `01_get_gtfs.R` | Downloads GTFS for r5r network. |
-| `02_network_and_patients.R` | Builds routing network. |
-| `03_travel_times.R` | Patient to care travel time metrics. |
-| `04_detailed_routes.R` | *(Optional)* Patient to care routes. |
-| `05_census.R` | Enriches with census data. |
-| `06_maps_and_plots.R` | Loads map/plot functions. |
+Four tables, each at a different level of detail:
 
----
+| Table | One row per | Answers |
+|-------|-------------|---------|
+| **1. patient × site × hour** | patient, site, arrival hour | What does this specific trip look like? |
+| **2. patient × site** | patient, site | How good is this patient's access to this site across the day? |
+| **3. patient** | patient | What are this patient's options overall? |
+| **4. site** | site | Who can reach this site, how hard is the trip, and whose closest option is it? |
 
-## Setup
+Routing is **arrival-framed**: for each target arrival hour, the pipeline finds the *latest* time a patient could leave home and still arrive on time.
 
-### 1. Install R and RStudio
-- R: https://cran.r-project.org/
-- RStudio: https://posit.co/download/rstudio-desktop/
-
-### 2. Install Java 21
-In the RStudio console:
-```r
-install.packages("rJavaEnv")
-rJavaEnv::rje_consent(provided = TRUE)
-rJavaEnv::java_quick_install(version = 21)
-```
-Then **restart RStudio**.
-
-### 3. Install R packages
-```r
-install.packages(c(
-  "r5r", "sf", "dplyr", "tidyr", "purrr", "lubridate",
-  "tidycensus", "tigris", "ggplot2", "ggExtra", "mapview",
-  "leaflet", "RColorBrewer", "bivariateLeaflet"
-))
-```
-
-### 4. Get a Census API key (free)
-1. Request one at https://api.census.gov/data/key_signup.html — they email it to you.
-2. Save it so R finds it automatically. In the console:
-   ```r
-   install.packages("usethis")
-   usethis::edit_r_environ()
-   ```
-   This opens a file called `.Renviron`. Add this line (paste your real key):
-   ```
-   CENSUS_API_KEY=your_key_here
-   ```
-   Save the file and **restart RStudio**.
-3. Confirm it worked:
-   ```r
-   Sys.getenv("CENSUS_API_KEY")   # should print your key, not ""
-   ```
+All routing runs **locally on your machine**. No patient address is ever sent to an external service, which is what makes the workflow compatible with HIPAA and similar data governance rules.
 
 ---
 
-## Inputs
+## Before you start: what you need to prepare
 
-1. **Street map** — download a regional `.osm.pbf` and put it in
-   `data/network/`.
-2. **Patient file** — an `.rds` with columns `patient_id`, `origin_lon`,
-   `origin_lat`, placed at `data/patients/sim_pts_v1.rds`. (Change the path in
-   `00_settings.R` if yours differs.)
+Running this successfully takes some setup. Here is everything, in order.
+
+### 1. Install R and the required packages
+
+Install [R](https://cran.r-project.org/) (and optionally [RStudio](https://posit.co/download/rstudio-desktop/)). Then install the packages the script uses:
+
+```r
+install.packages(c("tidyverse", "r5r", "digest", "zip"))
+```
+
+### 2. Install Java
+
+`r5r` runs on Java under the hood. You need **Java 21 (JDK)** installed.
+
+- Download from [Adoptium Temurin](https://adoptium.net/) (free, works on Windows/Mac/Linux).
+- After installing, restart R and confirm it is found:
+
+```r
+rJavaEnv::java_check_version_rjava()   # or simply run r5r and watch for Java errors
+```
+
+### 3. Download a street network (`.pbf` file)
+
+`r5r` needs the road/sidewalk network for the walking parts of each trip. This comes from **OpenStreetMap**, as a `.pbf` file.
+
+- Download an extract for your metro area from [Geofabrik](https://download.geofabrik.de/) or [BBBike](https://extract.bbbike.org/).
+- Pick an area that **covers all your patients and all your care sites**
+- Save the `.pbf` file into your **network directory** (`network_dir`).
+
+### 4. Find the GTFS feeds for every transit agency in your region
+
+**GTFS** is the standard format transit agencies use to publish their schedules. Each agency publishes its own feed as a `.zip` file at a public URL.
+
+You need to find the feed URL for **every agency a patient might realistically use** to reach your sites. In a multi-agency region, a single trip can cross agencies (e.g. a local bus to a regional rail line).
+
+Where to find feed URLs:
+
+- The agency's own developer/open-data page (search *"[agency name] GTFS"* or *"[agency name] developer resources"*).
+- Aggregators like [Mobility Database](https://mobilitydatabase.org/) or [Transitland](https://www.transit.land/) — searchable directories of GTFS feeds worldwide.
+
+Put each feed name and URL into the `gtfs_feeds` list in the config (see below). Use the **direct download link** to the `.zip`.
+
+> **Some feeds are nested** — a downloaded `.zip` that contains more `.zip` files inside it (for example, separate bus and rail feeds bundled together). The script automatically detects and unpacks these, so you don't need to handle it yourself.
+
+### 5. Prepare your patient file
+
+A CSV with, at minimum:
+
+- a **patient ID** column,
+- a **latitude** column,
+- a **longitude** column.
+
+> Patients must already be **geocoded** (have lat/lon). Rows with missing coordinates are automatically dropped before routing.
 
 ---
 
-## Run Instructions
+## Configuring the pipeline
 
-Open the project by double-clicking `transit-access.Rproj` (this points R at
-the right folder — check with `getwd()`, it should end in `/transit-access`).
+Open the script and edit the `CONFIGURE` block. Every setting you need is here.
 
-**Step 1 — Get GTFS transit data:**
+### Directories
+
 ```r
-source("scripts/00_settings.R")
-source("scripts/01_get_gtfs.R")
-get_all_gtfs()
-```
-The feeds save to `data/network/`.
-
-**Step 2 — Run the analysis:**
-```r
-source("scripts/02_network_and_patients.R")
-source("scripts/03_travel_times.R")
-source("scripts/05_census.R")
-source("scripts/06_maps_and_plots.R")
+network_dir <- ".../Data/Network"        # holds your .pbf and downloaded GTFS feeds
+hash_dir    <- ".../Data/Network/Hash"    # bookkeeping for change detection (auto-created)
 ```
 
-**Step 3 (optional) — Draw individual routes:**
+The **network directory must already exist** and contain your `.pbf` file before you run. The hash directory is created automatically if missing.
+
+### Patient file
+
 ```r
-source("scripts/04_detailed_routes.R")
+patient_file     <- ".../patients.csv"    # path to your geocoded patient CSV
+patient_id_field <- "patient_id"          # your ID column name
+lat_field        <- "lat"                 # your latitude column name
+lon_field        <- "lon"                 # your longitude column name
 ```
 
-The computationally heavy steps (`03`, `04`) save their results to `data/`, so re-running just
-reloads them. To force a recalculation, delete the matching `.rds` file.
+### Care sites (destinations)
+
+```r
+destinations <- data.frame(
+  id  = c("SITE_A", "SITE_B", ...),       # your site names
+  lon = c(-75.19, -75.40, ...),           # site longitudes
+  lat = c( 39.94,  40.08, ...)            # site latitudes
+)
+```
+
+One row per care site. Add or remove rows for however many sites you have.
+
+### Transit feeds
+
+```r
+gtfs_feeds <- c(
+  agency_one = "https://.../feed.zip",
+  agency_two = "https://.../feed.zip",
+  ...
+)
+```
+
+One entry per agency (see step 4 above).
+
+### Routing parameters
+
+These define what counts as a reasonable transit trip. **The defaults reflect a pediatric population and should be reviewed for your use case.**
+
+| Parameter | Default | What it means | Consider changing if… |
+|-----------|---------|---------------|------------------------|
+| `mode` | `"TRANSIT"` | Travel modes allowed | You want walk-only or other modes |
+| `max_trip_duration` | `60` | Longest trip to model, in minutes. Trips beyond this are treated as unreachable | Your region is more spread out (try 90–120) |
+| `max_walk_time` | `15` | Longest walk to/from a stop, per leg, in minutes | Your population walks more or less |
+| `walk_speed` | `3.6` | Walking speed in km/h | Your population is able to walk faster |
+| `max_rides` | `3` | Max vehicles per trip (3 = up to 2 transfers) | You want to allow more/fewer transfers |
+| `batch_size` | `1000` | Patients routed per batch. Affects memory use, not results | You hit memory limits (lower it) |
+
+### Analysis window
+
+```r
+timezone         <- "America/New_York"    # your region's timezone
+arrival_hours    <- 6:17                  # hours to test (6 = 6am ... 17 = 5pm)
+analysis_weekday <- "Wednesday"           # representative weekday to analyze
+```
+
+Set `arrival_hours` to span your clinical day. The pipeline picks the analysis weekday closest to the middle of the date range your feeds are valid for.
+
+### Java memory
+
+```r
+java_memory <- "-Xmx25G"                  # max memory r5r can use
+```
+
+`-Xmx25G` means 25 GB. Set this comfortably below your machine's total RAM. Large patient counts and dense networks need more; lower it if you have less RAM available.
 
 ---
 
-## Viewing maps and plots
+## Running it
 
-Sourcing `06_maps_and_plots.R` loads the functions but doesn't draw anything.
-Call them in the console. Maps open in the **Viewer** pane (bottom-right);
-scatter plots open in the **Plots** pane.
+Once everything above is set:
 
-```r
+1. Confirm your `.pbf` file is sitting in `network_dir`.
+2. Open the script and run it top to bottom.
 
-# see columns to map
-names(dat)
+On the **first run**, `r5r` builds the transit network from your `.pbf` and GTFS feeds — this takes a few minutes and only happens once. It rebuilds automatically only when a feed actually changes.
 
-# single-variable maps
-make_map(dat, "closest_med_tt", "Median Travel Time to Closest Care")
-make_map(dat, "n_patients",     "Number of Patients")
-
-# two-variable equity maps
-make_bivariate_map(dat, "pct_no_vehicle", "closest_avg_tt")
-
-# scatter plots
-make_scatter(dat, "poverty_rate", "closest_range_tt",
-             "Poverty Rate (%)", "Travel Time Variation (min)")
-             
-```
+The four output tables are created as objects in your R session (`patient_transit_arrival`, `patient_site_summary`, `patient_level`, `site_level_summary`).
 
 ---
 
-## Note: GTFS dates
+## How it works (high level)
 
-`r5r` only routes on dates that exist in the GTFS calendar. If your departure date
-is outside the feeds' valid window. Find a good date:
-```r
-source("scripts/04_detailed_routes.R")   # loads check_gtfs_dates()
-check_gtfs_dates()
-```
-Then update `departure_times` and `route_departure` in `00_settings.R`, delete
-`data/ttm_all_hours.rds` and `data/detailed_routes.rds` (and the
-`data/route_batches/` folder), and re-run from `03`.
+1. **Read patients** — load the CSV, standardize the ID/lat/lon columns, keep all other fields.
+2. **Download GTFS** — fetch each agency feed, unpack any nested zips.
+3. **Detect changes** — hash every network file so unchanged feeds aren't reprocessed on re-runs.
+4. **Prefix routes by agency** — tag each route with its agency name (only for new/changed feeds), so the pipeline can count how many agencies a trip uses.
+5. **Set the validity window** — find the date range where all feeds overlap, and pick the analysis date inside it.
+6. **Build the network** — compile the `.pbf` + GTFS into a routable network.
+7. **Route** — for every patient, site, and arrival hour, find the latest feasible departure and break the trip into walk/wait/ride/transfer components.
+8. **Summarize** — roll the results up into the four tables.
+
+Because results only reflect the schedules in the feeds you used, every output table is stamped with the **service window** — the range of dates those results are valid for. Transit schedules change several times a year, so a result is a snapshot valid for a bounded period, not a permanent property of an address.
 
 ---
-
-## Folder layout
-
-```
-transit-access/
-├── scripts/        the numbered scripts
-├── data/
-│   ├── network/    street map (.pbf) + transit GTFS zips
-│   └── patients/   patient file
-└── README.md
-```
