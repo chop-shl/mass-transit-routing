@@ -653,3 +653,37 @@ save_fig(mapC, "mapC_flip", w = 6.5, h = 6.8)
 message("map C written")
 
 message("\nall outputs in ", out_dir)
+
+
+
+
+mapD_dat <- origins_sf |>
+  left_join(od_pair, by = "origin_id") |> 
+  filter(site=="CHOP_PHL", scenario=="primary")
+
+
+mapD <- ggplot() +
+  base_layers() +
+  geom_sf(data = mapD_dat, aes(colour = as.character(median_agencies),
+                               #size = ifelse(median_agencies > 0, 1, 0)
+                               ),
+          shape = 19, alpha = 0.8) +
+  overlay_layers() +
+  # second pass on the two-facility origins so they sit above the routes
+  geom_sf(data = filter(mapA_dat, n_fac == "2"), aes(colour = n_fac),
+          size = 1.2, shape = 19, alpha = 0.4) +
+  coord_view +
+  scale_colour_manual(values = pal$access, name = "Transit Agencies", drop = FALSE) +
+  scale_size_continuous(range = c(0.8, 1.5)) +
+  labs(title = "Number Agencies to Access Care",
+       subtitle = sprintf("Each point is one synthetic patient origin, within %d minutes at any of the eight arrival hours.\n%s",
+                          cfg$routing$max_trip_duration, view_note)) +
+  guides(colour = guide_legend(nrow = 1, override.aes = list(size = 3)),
+         size = "none") +
+  theme_map()
+
+save_fig(mapD, "mapD_transfer_count", w = 6.5, h = 6.8)
+message("map A written")
+
+
+"#c9c6c0" "#f0a43c" "#3b2f6b" 
